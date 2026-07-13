@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="800" viewBox="0 0 1280 800">
+  <rect width="1280" height="800" fill="#eaf0f6"/>
+  <rect x="84" y="54" width="1112" height="692" rx="18" fill="#ffffff" stroke="#c8d4e0" stroke-width="2"/>
+  <rect x="84" y="54" width="1112" height="52" rx="18" fill="#12344d"/>
+  <circle cx="120" cy="80" r="8" fill="#f1705d"/><circle cx="146" cy="80" r="8" fill="#f5c04e"/><circle cx="172" cy="80" r="8" fill="#63c174"/>
+  <g transform="translate(1014 66) scale(.18)">
+    <rect width="128" height="128" rx="27" fill="#12344d"/><path d="M64 18 105 33v29c0 25-16 39-41 50C39 101 23 87 23 62V33l41-15Z" fill="#f4f8fb"/><path d="M42 50h35l-8-8 7-7 20 20-20 20-7-7 8-8H42v-10Zm44 18h-35l8 8-7 7-20-20 20-20 7 7-8 8h35v10Z" fill="#1666cc"/>
+  </g>
+  <text x="154" y="175" fill="#172b3a" font-family="Arial, sans-serif" font-size="38" font-weight="700">CF Access Header Injector</text>
+  <text x="154" y="220" fill="#476277" font-family="Arial, sans-serif" font-size="21">Configure one Cloudflare Access service token per HTTPS site.</text>
+  <text x="154" y="253" fill="#476277" font-family="Arial, sans-serif" font-size="21">Only the two fixed service-token headers are added to approved requests.</text>
+  <rect x="150" y="294" width="704" height="320" rx="12" fill="#f9fbfd" stroke="#b8c8d6" stroke-width="2"/>
+  <text x="182" y="335" fill="#172b3a" font-family="Arial, sans-serif" font-size="22" font-weight="700">Cloudflare Access site</text>
+  <text x="182" y="377" fill="#243b4d" font-family="Arial, sans-serif" font-size="18" font-weight="700">Domain scope</text>
+  <rect x="182" y="390" width="640" height="43" rx="6" fill="#fff" stroke="#aabccc"/><text x="198" y="419" fill="#233b50" font-family="Menlo, monospace" font-size="17">*.vookie.net</text>
+  <text x="182" y="473" fill="#243b4d" font-family="Arial, sans-serif" font-size="18" font-weight="700">CF Access Client ID</text>
+  <rect x="182" y="486" width="640" height="43" rx="6" fill="#fff" stroke="#aabccc"/><text x="198" y="515" fill="#233b50" font-family="Menlo, monospace" font-size="17">example.access.cfargotunnel.com</text>
+  <text x="182" y="569" fill="#243b4d" font-family="Arial, sans-serif" font-size="18" font-weight="700">CF Access Client Secret</text>
+  <rect x="182" y="582" width="640" height="43" rx="6" fill="#fff" stroke="#aabccc"/><text x="198" y="611" fill="#233b50" font-family="Menlo, monospace" font-size="17">••••••••••••••••••••••••••••</text>
+  <rect x="885" y="294" width="250" height="320" rx="12" fill="#fff9eb" stroke="#e0a000" stroke-width="2"/>
+  <text x="916" y="338" fill="#6f5300" font-family="Arial, sans-serif" font-size="21" font-weight="700">Security note</text>
+  <text x="916" y="378" fill="#5d4b14" font-family="Arial, sans-serif" font-size="17">Credentials stay</text>
+  <text x="916" y="405" fill="#5d4b14" font-family="Arial, sans-serif" font-size="17">in local browser</text>
+  <text x="916" y="432" fill="#5d4b14" font-family="Arial, sans-serif" font-size="17">storage. Use a</text>
+  <text x="916" y="459" fill="#5d4b14" font-family="Arial, sans-serif" font-size="17">dedicated token</text>
+  <text x="916" y="486" fill="#5d4b14" font-family="Arial, sans-serif" font-size="17">for each narrow</text>
+  <text x="916" y="513" fill="#5d4b14" font-family="Arial, sans-serif" font-size="17">site scope.</text>
+  <rect x="150" y="654" width="212" height="52" rx="8" fill="#1666cc"/><text x="185" y="687" fill="#fff" font-family="Arial, sans-serif" font-size="18" font-weight="700">Save configuration</text>
+  <text x="387" y="687" fill="#476277" font-family="Arial, sans-serif" font-size="17">Example values only. No secret is shown.</text>
+</svg>

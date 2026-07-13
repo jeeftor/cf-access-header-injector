@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="440" height="280" viewBox="0 0 440 280">
+  <rect width="440" height="280" rx="20" fill="#12344d"/>
+  <g transform="translate(43 52) scale(.95)">
+    <rect width="128" height="128" rx="27" fill="#f4f8fb"/><path d="M64 18 105 33v29c0 25-16 39-41 50C39 101 23 87 23 62V33l41-15Z" fill="#12344d"/><path d="M42 50h35l-8-8 7-7 20 20-20 20-7-7 8-8H42v-10Zm44 18h-35l8 8-7 7-20-20 20-20 7 7-8 8h35v10Z" fill="#1666cc"/>
+  </g>
+  <text x="185" y="114" fill="#ffffff" font-family="Arial, sans-serif" font-size="27" font-weight="700">CF Access</text>
+  <text x="185" y="149" fill="#ffffff" font-family="Arial, sans-serif" font-size="27" font-weight="700">Header Injector</text>
+  <text x="185" y="193" fill="#b9d3eb" font-family="Arial, sans-serif" font-size="17">Narrow, local-only</text>
+  <text x="185" y="218" fill="#b9d3eb" font-family="Arial, sans-serif" font-size="17">Cloudflare Access tokens</text>
+</svg>

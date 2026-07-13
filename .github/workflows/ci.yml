@@ -19,3 +19,4 @@ jobs:
           node-version: 24
       - run: make check
       - run: make package
+      - run: make firefox-lint

@@ -1,9 +1,22 @@
-name: Release
+name: Publish browser stores
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to publish, for example v0.1.1
+        required: true
+        type: string
+      publish_chrome:
+        description: Upload and submit an update to the Chrome Web Store
+        required: true
+        default: false
+        type: boolean
+      publish_firefox:
+        description: Request an unlisted AMO signature and attach the XPI to the GitHub Release
+        required: true
+        default: false
+        type: boolean
 
 permissions:
   contents: write
@@ -11,35 +24,18 @@ permissions:
   attestations: write
 
 jobs:
-  release:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - run: node scripts/check-release-version.mjs "$GITHUB_REF_NAME"
-      - run: make package
-      - name: Generate GitHub provenance attestation
-        uses: actions/attest@v4
-        with:
-          subject-path: dist/cf-access-header-injector.zip
-      - name: Publish GitHub release
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/cf-access-header-injector.zip --generate-notes
-
   chrome:
-    needs: release
-    if: ${{ vars.PUBLISH_CHROME == 'true' }}
+    if: ${{ inputs.publish_chrome }}
     runs-on: ubuntu-latest
     environment: extension-signing
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: node scripts/check-release-version.mjs "$GITHUB_REF_NAME"
+      - run: node scripts/check-release-version.mjs "${{ inputs.tag }}"
       - run: make package
       - name: Upload and submit Chrome Web Store package
         env:
@@ -51,16 +47,17 @@ jobs:
         run: node scripts/publish-chrome-store.mjs dist/cf-access-header-injector.zip
 
   firefox:
-    needs: release
-    if: ${{ vars.PUBLISH_FIREFOX == 'true' }}
+    if: ${{ inputs.publish_firefox }}
     runs-on: ubuntu-latest
     environment: extension-signing
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag }}
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - run: node scripts/check-release-version.mjs "$GITHUB_REF_NAME"
+      - run: node scripts/check-release-version.mjs "${{ inputs.tag }}"
       - run: make check
       - run: make firefox-lint
       - run: make package
@@ -84,4 +81,4 @@ jobs:
       - name: Add signed XPI to GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release upload "$GITHUB_REF_NAME" dist/cf-access-header-injector-firefox.xpi --clobber
+        run: gh release upload "${{ inputs.tag }}" dist/cf-access-header-injector-firefox.xpi --clobber

@@ -54,3 +54,24 @@ make package
 ```
 
 `make` alone only prints the available targets.
+
+## Signed distribution
+
+Every tagged GitHub release builds the Chrome Web Store upload ZIP from source and creates a GitHub
+artifact provenance attestation. That attestation proves the release package came from this repository,
+tag, and GitHub Actions workflow; it does not replace browser-store signing.
+
+- Chrome or Chromium: Chrome Web Store distribution provides the browser-trusted installation and update
+  mechanism. Once its protected environment is configured, each tag submits the Store update automatically.
+- Firefox: Mozilla must sign an XPI before it can be permanently installed in Firefox Release or Beta. The
+  protected release job requests an unlisted AMO signature and attaches the signed XPI to that GitHub Release.
+
+The required developer-account setup, GitHub environment names, and the one-time first-publish steps are in
+[the signing guide](docs/store-signing.md). No browser-store credential, OAuth token, or private key belongs in
+this repository.
+
+You can verify a release ZIP after downloading it:
+
+```sh
+gh attestation verify cf-access-header-injector.zip --repo jeeftor/cf-access-header-injector
+```
