@@ -29,17 +29,29 @@ function createAuthorizationHeader() {
 }
 
 async function amoRequest(path, options = {}) {
-  const response = await fetch(path, {
-    ...options,
-    headers: {
-      Authorization: createAuthorizationHeader(),
-      ...options.headers,
-    },
-  });
-  if (!response.ok) {
-    throw new Error(`AMO listing asset request failed with HTTP ${response.status}.`);
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const response = await fetch(path, {
+      ...options,
+      headers: {
+        Authorization: createAuthorizationHeader(),
+        ...options.headers,
+      },
+    });
+    if (response.ok) {
+      await new Promise((resolve) => setTimeout(resolve, 1200));
+      return response;
+    }
+
+    if (response.status !== 429 || attempt === 2) {
+      throw new Error(`AMO listing asset request failed with HTTP ${response.status}.`);
+    }
+
+    const retryAfter = Number.parseInt(response.headers.get("retry-after") ?? "", 10);
+    const delayMs = Number.isFinite(retryAfter) ? retryAfter * 1000 : 5000;
+    await new Promise((resolve) => setTimeout(resolve, delayMs));
   }
-  return response;
+
+  throw new Error("AMO listing asset request retry limit reached.");
 }
 
 const addonEndpoint = `${apiBase}/${encodeURIComponent(addonGuid)}`;
