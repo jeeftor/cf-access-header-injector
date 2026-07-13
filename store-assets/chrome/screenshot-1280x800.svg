@@ -4,7 +4,7 @@
   <rect x="84" y="54" width="1112" height="52" rx="18" fill="#12344d"/>
   <circle cx="120" cy="80" r="8" fill="#f1705d"/><circle cx="146" cy="80" r="8" fill="#f5c04e"/><circle cx="172" cy="80" r="8" fill="#63c174"/>
   <g transform="translate(1014 66) scale(.18)">
-    <rect width="128" height="128" rx="27" fill="#12344d"/><path d="M64 18 105 33v29c0 25-16 39-41 50C39 101 23 87 23 62V33l41-15Z" fill="#f4f8fb"/><path d="M42 50h35l-8-8 7-7 20 20-20 20-7-7 8-8H42v-10Zm44 18h-35l8 8-7 7-20-20 20-20 7 7-8 8h35v10Z" fill="#1666cc"/>
+    <rect width="128" height="128" rx="30" fill="#12344d"/><path d="M29 35h70v13H29zm0 45h70v13H29z" fill="#dceaf7"/><path d="M30 58h40V46l29 18-29 18V70H30z" fill="#4aa3ff"/>
   </g>
   <text x="154" y="163" fill="#172b3a" font-family="Arial, sans-serif" font-size="38" font-weight="700">Gimme Sum Headers!</text>
   <text x="154" y="205" fill="#476277" font-family="Arial, sans-serif" font-size="20">Create a reusable header set, then map it to only the HTTPS sites you choose.</text>
