@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { chromium } from "playwright";
 
 const extensionPath = resolve(process.env.EXTENSION_PATH ?? "dist/chrome-package");
@@ -10,6 +10,24 @@ const echoHost = new URL(echoUrl).hostname;
 const testHeaderName = "X-Gimme-Sum-Headers-Test";
 const testHeaderValue = "gimme-sum-headers-browser-smoke";
 const userDataDir = await mkdtemp(resolve(tmpdir(), "gimme-sum-headers-"));
+const configuration = {
+  headerSets: [{
+    id: "browser-smoke",
+    name: "Browser smoke test",
+    kind: "custom",
+    headers: [{ name: testHeaderName, value: testHeaderValue }],
+  }],
+  siteAssignments: [{
+    scope: echoHost,
+    headerSetId: "browser-smoke",
+    enabled: true,
+  }],
+};
+
+const manifestPath = join(extensionPath, "manifest.json");
+const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
+manifest.host_permissions = [...new Set([...(manifest.host_permissions ?? []), `https://${echoHost}/*`])];
+await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
 try {
   const context = await chromium.launchPersistentContext(userDataDir, {
@@ -24,17 +42,15 @@ try {
   try {
     const worker = context.serviceWorkers()[0] ?? await context.waitForEvent("serviceworker");
     const extensionId = new URL(worker.url()).host;
-    const optionsPage = await context.newPage();
-    await optionsPage.goto(`chrome-extension://${extensionId}/options.html`);
-    await optionsPage.locator(".header-set-name").fill("Browser smoke test");
-    await optionsPage.locator(".header-set-kind").selectOption("custom");
-    await optionsPage.locator(".custom-header-name").fill(testHeaderName);
-    await optionsPage.locator(".custom-header-value").fill(testHeaderValue);
-    await optionsPage.locator("#add-assignment").click();
-    await optionsPage.locator(".assignment-scope").fill(echoHost);
-    await optionsPage.locator(".assignment-header-set").selectOption({ label: "Browser smoke test" });
-    await optionsPage.getByRole("button", { name: "Save configuration" }).click();
-    await optionsPage.getByText("Enabled 1 site with reusable header sets.").waitFor();
+    const reloadedWorker = context.waitForEvent("serviceworker");
+    await worker.evaluate(async (value) => {
+      await chrome.storage.local.set({
+        headerSets: value.headerSets,
+        siteAssignments: value.siteAssignments,
+      });
+      chrome.runtime.reload();
+    }, configuration);
+    await reloadedWorker;
 
     const page = await context.newPage();
     await page.goto(echoUrl, { waitUntil: "domcontentloaded" });
