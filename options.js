@@ -2,28 +2,46 @@ const extension = globalThis.browser ?? globalThis.chrome;
 
 const form = document.querySelector("#configuration-form");
 const headerSetList = document.querySelector("#header-set-list");
+const headerSetEmpty = document.querySelector("#header-set-empty");
 const headerSetEditor = document.querySelector("#header-set-editor");
 const assignmentList = document.querySelector("#site-assignment-list");
 const headerSetListItemTemplate = document.querySelector("#header-set-list-item-template");
 const headerSetEditorTemplate = document.querySelector("#header-set-editor-template");
 const assignmentTemplate = document.querySelector("#site-assignment-template");
+const headerSetDialog = document.querySelector("#header-set-dialog");
 const selectedHeaderSetTitle = document.querySelector("#selected-header-set-title");
 const selectedHeaderSetDescription = document.querySelector("#selected-header-set-description");
 const addHeaderSetButton = document.querySelector("#add-header-set");
+const closeHeaderSetDialogButton = document.querySelector("#close-header-set-dialog");
 const addAssignmentButton = document.querySelector("#add-assignment");
+const addTestSiteButton = document.querySelector("#add-test-site");
 const forgetButton = document.querySelector("#forget");
+const siteEmpty = document.querySelector("#site-empty");
 const status = document.querySelector("#status");
+const saveBar = document.querySelector(".save-bar");
+const saveTitle = document.querySelector("#save-title");
+const saveDescription = document.querySelector("#save-description");
 const checkUpdateButton = document.querySelector("#check-update");
 const updateStatus = document.querySelector("#update-status");
 const updateLink = document.querySelector("#update-link");
+const testScope = "httpbingo.org";
+const testHeaderName = "X-Gimme-Sum-Headers-Test";
+const testHeaderValue = "working";
+const testEchoUrl = "https://httpbingo.org/headers";
 
 let headerSets = [];
 let selectedHeaderSetId = null;
+let hasUnsavedChanges = false;
 
 void restoreConfiguration();
 form.addEventListener("submit", saveConfiguration);
+form.addEventListener("input", () => setUnsavedChanges(true));
+form.addEventListener("change", () => setUnsavedChanges(true));
 addHeaderSetButton.addEventListener("click", appendHeaderSet);
-addAssignmentButton.addEventListener("click", () => appendAssignment());
+closeHeaderSetDialogButton.addEventListener("click", completeHeaderSet);
+headerSetDialog.addEventListener("close", closeHeaderSetDialog);
+addAssignmentButton.addEventListener("click", addProtectedSite);
+addTestSiteButton.addEventListener("click", addTestSite);
 forgetButton.addEventListener("click", forgetConfiguration);
 checkUpdateButton.addEventListener("click", checkForUpdate);
 
@@ -47,7 +65,13 @@ async function checkForUpdate() {
   updateLink.hidden = true;
   updateStatus.textContent = "Checking GitHub for the latest release…";
 
-  const granted = await extension.permissions.request({ origins: [githubPermission] });
+  let granted;
+  try {
+    granted = await extension.permissions.request({ origins: [githubPermission] });
+  } catch {
+    updateStatus.textContent = "GitHub permission must be requested directly from Check for update. Try again.";
+    return;
+  }
   if (!granted) {
     updateStatus.textContent = "GitHub access was not granted; no update check was made.";
     return;
@@ -77,20 +101,16 @@ async function checkForUpdate() {
  */
 function renderConfiguration(configuration) {
   headerSets = (configuration.headerSets ?? []).map(copyHeaderSet);
-  if (headerSets.length === 0) {
-    headerSets.push(emptyHeaderSet());
-  }
-  selectedHeaderSetId = headerSets[0].id;
+  selectedHeaderSetId = headerSets[0]?.id ?? null;
 
   assignmentList.replaceChildren();
   for (const assignment of configuration.siteAssignments ?? []) {
     appendAssignment(assignment);
   }
-  if (assignmentList.children.length === 0) {
-    appendAssignment();
-  }
+  siteEmpty.hidden = assignmentList.children.length !== 0;
 
   renderHeaderSetWorkspace();
+  setUnsavedChanges(false);
 }
 
 /**
@@ -102,6 +122,7 @@ function renderHeaderSetWorkspace() {
   renderHeaderSetList();
   renderHeaderSetEditor();
   refreshAssignmentSetChoices();
+  updateAssignmentActionAvailability();
 }
 
 /**
@@ -111,17 +132,29 @@ function renderHeaderSetWorkspace() {
  */
 function renderHeaderSetList() {
   headerSetList.replaceChildren();
+  const visibleHeaderSets = headerSets.filter(hasName);
+  headerSetEmpty.hidden = visibleHeaderSets.length !== 0;
 
-  for (const headerSet of headerSets) {
+  for (const headerSet of visibleHeaderSets) {
     const fragment = headerSetListItemTemplate.content.cloneNode(true);
     const item = fragment.querySelector(".header-set-list-item");
+    const selectButton = item.querySelector(".header-set-list-select");
     const assignmentCount = assignmentCountFor(headerSet.id);
 
     item.dataset.selected = String(headerSet.id === selectedHeaderSetId);
-    item.setAttribute("aria-pressed", String(headerSet.id === selectedHeaderSetId));
-    item.querySelector(".header-set-list-item-name").textContent = headerSet.name || "Untitled header set";
+    selectButton.setAttribute("aria-pressed", String(headerSet.id === selectedHeaderSetId));
+    item.querySelector(".header-set-list-item-name").textContent = headerSet.name;
     item.querySelector(".header-set-list-item-meta").textContent = `${presetLabel(headerSet.kind)} · ${assignmentCount} ${pluralize("site", assignmentCount)}`;
-    item.addEventListener("click", () => selectHeaderSet(headerSet.id));
+    selectButton.addEventListener("click", () => selectHeaderSet(headerSet.id));
+    const deleteButton = item.querySelector(".header-set-list-delete");
+    if (assignmentCount > 0) {
+      deleteButton.disabled = true;
+      deleteButton.title = "Remove or reassign this set's sites first.";
+    }
+    deleteButton.addEventListener("click", (event) => {
+      event.stopPropagation();
+      deleteHeaderSet(headerSet.id);
+    });
     headerSetList.append(item);
   }
 }
@@ -135,6 +168,9 @@ function renderHeaderSetEditor() {
   headerSetEditor.replaceChildren();
   const headerSet = selectedHeaderSet();
   if (!headerSet) {
+    selectedHeaderSetTitle.textContent = "No header set selected";
+    selectedHeaderSetDescription.textContent = "Create a header set when you need a new credential.";
+    headerSetEditor.textContent = "Header sets are optional until you add a protected site.";
     return;
   }
 
@@ -146,6 +182,7 @@ function renderHeaderSetEditor() {
 
   element.dataset.id = headerSet.id;
   nameInput.value = headerSet.name;
+  nameInput.addEventListener("input", () => nameInput.setCustomValidity(""));
   kindSelect.value = headerSet.kind;
   renderPresetFields(presetFields, headerSet.kind, headerSet.headers);
   element.querySelector(".header-set-usage").textContent = usageLabel(headerSet.id);
@@ -154,7 +191,6 @@ function renderHeaderSetEditor() {
     syncHeaderSetPreview();
   });
   element.addEventListener("input", syncHeaderSetPreview);
-  element.querySelector(".remove-header-set").addEventListener("click", removeSelectedHeaderSet);
 
   headerSetEditor.append(element);
   updateSelectedHeaderSetHeading(headerSet);
@@ -170,6 +206,7 @@ function selectHeaderSet(headerSetId) {
   captureSelectedHeaderSet();
   selectedHeaderSetId = headerSetId;
   renderHeaderSetWorkspace();
+  headerSetDialog.showModal();
 }
 
 /**
@@ -183,16 +220,18 @@ function appendHeaderSet() {
   headerSets.push(headerSet);
   selectedHeaderSetId = headerSet.id;
   renderHeaderSetWorkspace();
+  setUnsavedChanges(true);
+  headerSetDialog.showModal();
 }
 
 /**
- * Removes the selected header set only when no site assignment refers to it.
+ * Confirms and removes one unassigned header set.
  *
+ * @param {string} headerSetId Header-set identifier to remove.
  * @returns {void}
  */
-function removeSelectedHeaderSet() {
-  captureSelectedHeaderSet();
-  const headerSet = selectedHeaderSet();
+function deleteHeaderSet(headerSetId) {
+  const headerSet = headerSets.find((item) => item.id === headerSetId);
   if (!headerSet) {
     return;
   }
@@ -200,13 +239,54 @@ function removeSelectedHeaderSet() {
     setStatus("Reassign or remove every site that uses this header set first.", true);
     return;
   }
+  if (!window.confirm(`Delete “${headerSet.name}”?`)) {
+    return;
+  }
 
   headerSets = headerSets.filter((item) => item.id !== headerSet.id);
-  if (headerSets.length === 0) {
-    headerSets.push(emptyHeaderSet());
-  }
-  selectedHeaderSetId = headerSets[0].id;
+  selectedHeaderSetId = headerSets[0]?.id ?? null;
   renderHeaderSetWorkspace();
+  setUnsavedChanges(true);
+  if (headerSetDialog.open) {
+    headerSetDialog.close();
+  }
+}
+
+/**
+ * Preserves edits made in the dialog before it closes, including Escape dismissal.
+ *
+ * @returns {void}
+ */
+function closeHeaderSetDialog() {
+  const hadEditor = Boolean(headerSetEditor.querySelector("[data-header-set]"));
+  captureSelectedHeaderSet();
+  if (hadEditor) {
+    renderHeaderSetWorkspace();
+    setUnsavedChanges(true);
+  }
+}
+
+/**
+ * Closes the header-set editor only after the set has a user-provided name.
+ *
+ * @returns {void}
+ */
+function completeHeaderSet() {
+  const nameInput = headerSetEditor.querySelector(".header-set-name");
+  if (!nameInput) {
+    headerSetDialog.close();
+    return;
+  }
+
+  if (!nameInput.value.trim()) {
+    nameInput.setCustomValidity("Give this header set a name before continuing.");
+    nameInput.reportValidity();
+    nameInput.focus();
+    return;
+  }
+
+  nameInput.setCustomValidity("");
+  headerSetDialog.close();
 }
 
 /**
@@ -233,6 +313,7 @@ function captureSelectedHeaderSet() {
  */
 function syncHeaderSetPreview() {
   captureSelectedHeaderSet();
+  setUnsavedChanges(true);
   const headerSet = selectedHeaderSet();
   if (headerSet) {
     updateSelectedHeaderSetHeading(headerSet);
@@ -260,17 +341,45 @@ function appendAssignment(assignment = {}) {
   element.querySelector(".assignment-enabled").checked = assignment.enabled ?? true;
   element.querySelector(".assignment-header-set").addEventListener("change", syncHeaderSetPreview);
   element.querySelector(".assignment-scope").addEventListener("input", () => updateAssignmentScopeHelp(element));
+  element.querySelector(".test-headers").addEventListener("click", testHeaders);
   element.querySelector(".remove-assignment").addEventListener("click", () => {
     element.remove();
-    if (assignmentList.children.length === 0) {
-      appendAssignment();
-    }
+    siteEmpty.hidden = assignmentList.children.length !== 0;
     syncHeaderSetPreview();
+    setUnsavedChanges(true);
   });
 
   assignmentList.append(element);
+  siteEmpty.hidden = true;
   updateAssignmentScopeHelp(element);
   refreshAssignmentSetChoices();
+}
+
+/**
+ * Adds an editable protected-site row after a header set is available.
+ *
+ * @returns {void}
+ */
+function addProtectedSite() {
+  if (!headerSets.some(hasName)) {
+    appendHeaderSet();
+    setStatus("Create a header set first, then add the site that should use it.");
+    return;
+  }
+
+  appendAssignment();
+  setUnsavedChanges(true);
+}
+
+/**
+ * Keeps site creation aligned with the required header-set-first workflow.
+ *
+ * @returns {void}
+ */
+function updateAssignmentActionAvailability() {
+  const needsHeaderSet = !headerSets.some(hasName);
+  addAssignmentButton.disabled = needsHeaderSet;
+  addAssignmentButton.title = needsHeaderSet ? "Create a header set first." : "";
 }
 
 /**
@@ -286,6 +395,89 @@ function updateAssignmentScopeHelp(element) {
   help.textContent = scope.startsWith("*.")
     ? "Wildcard default: applies to matching subdomains; exact hostnames win."
     : "Exact hostname: takes precedence over any wildcard default.";
+  const testButton = element.querySelector(".test-headers");
+  testButton.hidden = scope !== testScope;
+  testButton.textContent = hasUnsavedChanges ? "Save & test headers" : "Test headers";
+}
+
+/**
+ * Adds a safe header-echo example without sending any real credentials.
+ *
+ * @returns {void}
+ */
+function addTestSite() {
+  captureSelectedHeaderSet();
+  const existingAssignment = [...assignmentList.querySelectorAll("[data-site-assignment]")].find(
+    (element) => element.querySelector(".assignment-scope").value.trim() === testScope,
+  );
+
+  if (existingAssignment) {
+    const existingHeaderSet = headerSets.find(
+      (item) => item.id === existingAssignment.querySelector(".assignment-header-set").value,
+    );
+    if (isTestHeaderSet(existingHeaderSet)) {
+      setStatus("The safe test site is already configured. Save changes, then choose Test headers.");
+    } else {
+      setStatus("httpbingo.org already has a mapping. Remove it before adding the safe test site.", true);
+    }
+    return;
+  }
+
+  let headerSet = headerSets.find(isTestHeaderSet);
+
+  if (!headerSet) {
+    headerSet = {
+      id: createIdentifier(),
+      name: headerSets.some((item) => item.name === "Header check") ? "Header check (test)" : "Header check",
+      kind: "custom",
+      headers: [{ name: testHeaderName, value: testHeaderValue }],
+    };
+    headerSets.push(headerSet);
+  }
+
+  appendAssignment({ scope: testScope, headerSetId: headerSet.id, enabled: true });
+
+  selectedHeaderSetId = headerSet.id;
+  renderHeaderSetWorkspace();
+  setUnsavedChanges(true);
+  setStatus("Test site added. Save changes, then choose Test headers to see the injected header.");
+}
+
+/**
+ * Saves pending changes first, then opens the header echo on a follow-up click.
+ *
+ * @returns {Promise<void>} A promise that resolves after the echo tab is opened or saving fails.
+ */
+async function testHeaders() {
+  if (hasUnsavedChanges) {
+    if (!(await saveConfiguration())) {
+      return;
+    }
+    setStatus("Saved. Choose Test headers to open the header echo.");
+    return;
+  }
+
+  const testWindow = window.open("about:blank", "_blank");
+  if (!testWindow) {
+    setStatus("Your browser blocked the test tab. Allow pop-ups for this extension and try again.", true);
+    return;
+  }
+
+  testWindow.location.href = testEchoUrl;
+  testWindow.opener = null;
+}
+
+/**
+ * Determines whether a header set is the non-secret header echo example.
+ *
+ * @param {{kind?: string, headers?: Array<{name?: string, value?: string}>}|undefined} headerSet Header set to inspect.
+ * @returns {boolean} Whether this is the built-in test header set.
+ */
+function isTestHeaderSet(headerSet) {
+  return headerSet?.kind === "custom"
+    && headerSet.headers?.length === 1
+    && headerSet.headers[0].name?.toLowerCase() === testHeaderName.toLowerCase()
+    && headerSet.headers[0].value === testHeaderValue;
 }
 
 /**
@@ -357,10 +549,16 @@ function appendCustomHeader(list, header = {}) {
   value.placeholder = "Header value";
   value.value = header.value ?? "";
   const remove = document.createElement("button");
-  remove.className = "secondary";
+  remove.className = "custom-header-remove";
   remove.type = "button";
-  remove.textContent = "Remove";
+  remove.textContent = "×";
+  remove.setAttribute("aria-label", "Remove custom header");
+  remove.title = "Remove custom header";
   remove.addEventListener("click", () => {
+    const headerName = name.value.trim() || "this custom header";
+    if (!window.confirm(`Remove ${headerName}?`)) {
+      return;
+    }
     row.remove();
     if (list.children.length === 0) {
       appendCustomHeader(list);
@@ -394,11 +592,11 @@ function refreshAssignmentSetChoices() {
 /**
  * Saves configuration after requesting only the required enabled host permissions.
  *
- * @param {SubmitEvent} event Form submission event.
- * @returns {Promise<void>} A promise that resolves after save feedback is shown.
+ * @param {SubmitEvent} [event] Form submission event when the form was submitted directly.
+ * @returns {Promise<boolean>} Whether the browser installed the saved rules.
  */
 async function saveConfiguration(event) {
-  event.preventDefault();
+  event?.preventDefault();
   setStatus("");
 
   let configuration;
@@ -406,15 +604,21 @@ async function saveConfiguration(event) {
     configuration = collectConfiguration();
   } catch (error) {
     setStatus(error.message, true);
-    return;
+    return false;
   }
 
   const origins = hostPermissionsFor(configuration.siteAssignments.filter((assignment) => assignment.enabled));
   if (origins.length > 0) {
-    const granted = await extension.permissions.request({ origins });
+    let granted;
+    try {
+      granted = await extension.permissions.request({ origins });
+    } catch {
+      setStatus("The browser could not request host permission. Save changes directly, then try again.", true);
+      return false;
+    }
     if (!granted) {
       setStatus("Required host permission was not granted, so no changes were saved.", true);
-      return;
+      return false;
     }
   }
 
@@ -425,8 +629,10 @@ async function saveConfiguration(event) {
     setStatus(enabledCount === 0
       ? "All site assignments are disabled."
       : `Enabled ${enabledCount} ${pluralize("site", enabledCount)} with reusable header sets.`);
+    return true;
   } catch {
     setStatus("The browser could not install the request-header rules. Header values were not displayed.", true);
+    return false;
   }
 }
 
@@ -509,6 +715,26 @@ async function forgetConfiguration() {
 }
 
 /**
+ * Shows whether the current form differs from what the browser is applying.
+ *
+ * @param {boolean} value Whether edits are pending a save.
+ * @returns {void}
+ */
+function setUnsavedChanges(value) {
+  hasUnsavedChanges = value;
+  saveBar.dataset.unsaved = String(value);
+  saveTitle.textContent = value ? "Unsaved changes" : "Changes applied";
+  saveDescription.textContent = value
+    ? "Save to apply these headers in the browser."
+    : "Only enabled HTTPS hostnames receive these headers.";
+  form.querySelector('button[type="submit"]').disabled = !value;
+
+  for (const button of assignmentList.querySelectorAll(".test-headers")) {
+    button.textContent = value ? "Save & test headers" : "Test headers";
+  }
+}
+
+/**
  * Converts assignments to unique host permission patterns.
  *
  * @param {Array<{scope: string}>} assignments Site assignments.
@@ -524,7 +750,7 @@ function hostPermissionsFor(assignments) {
  * @returns {Array<{id: string, name: string}>} Header-set choices.
  */
 function readHeaderSetChoices() {
-  return headerSets.map(({ id, name }) => ({ id, name }));
+  return headerSets.filter(hasName).map(({ id, name }) => ({ id, name }));
 }
 
 /**
@@ -556,7 +782,7 @@ function assignmentCountFor(headerSetId) {
  */
 function updateSelectedHeaderSetHeading(headerSet) {
   const assignmentCount = assignmentCountFor(headerSet.id);
-  selectedHeaderSetTitle.textContent = headerSet.name || "Untitled header set";
+  selectedHeaderSetTitle.textContent = headerSet.name || "Name this header set";
   selectedHeaderSetDescription.textContent = `${presetLabel(headerSet.kind)} · ${assignmentCount} ${pluralize("site", assignmentCount)} assigned`;
 }
 
@@ -610,6 +836,16 @@ function isBlankHeaderSet(headerSet) {
     return headerSet.headers.every((header) => !String(header.name ?? "").trim() && !String(header.value ?? "").trim());
   }
   return headerSet.headers.every((header) => !String(header.value ?? "").trim());
+}
+
+/**
+ * Determines whether a header set can be shown or selected by name.
+ *
+ * @param {{name?: string}} headerSet Header-set draft.
+ * @returns {boolean} Whether the draft has a non-empty user-provided name.
+ */
+function hasName(headerSet) {
+  return Boolean(headerSet.name?.trim());
 }
 
 /**

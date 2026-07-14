@@ -4,11 +4,13 @@ PACKAGE_FILES := manifest.json background.js options.html options.js options.css
 	icons/icon-16.png icons/icon-32.png icons/icon-48.png icons/icon-128.png
 PACKAGE_EPOCH ?= $(shell git log -1 --format=%ct 2>/dev/null || printf 315532800)
 FIREFOX_WEB_EXT_VERSION := 9.4.0
+BUILD_TREE_STATE := $(shell git diff --quiet && git diff --cached --quiet || printf -- -dirty)
+BUILD_LABEL ?= local-$(shell date -u +%Y%m%d-%H%M%S)-git-$(shell git rev-parse --short HEAD 2>/dev/null || printf no-git)$(BUILD_TREE_STATE)
 
 .PHONY: help test check stage chrome-stage firefox-stage package firefox-package firefox-lint browser-smoke
 
 help:
-	@printf '%s\n' 'Available targets:' '  make test            Run rule-generation tests.' '  make check           Validate JSON and JavaScript syntax.' '  make package         Create the deterministic Chrome Web Store ZIP.' '  make firefox-package Create the deterministic Firefox AMO upload ZIP.' '  make firefox-lint    Lint the staged Firefox extension with web-ext.' '  make browser-smoke   Verify Chromium injects a test header at httpbingo.org.'
+	@printf '%s\n' 'Available targets:' '  make test            Run rule-generation tests.' '  make check           Validate JSON and JavaScript syntax.' '  make package         Create the deterministic Chrome Web Store ZIP.' '  make firefox-package Create the deterministic Firefox AMO upload ZIP.' '  make firefox-lint    Lint the staged Firefox extension with web-ext.' '  make browser-smoke   Verify Chromium injects a test header at httpbingo.org.' '                       Set BROWSER_EXECUTABLE_PATH to use a local Chromium binary.' '  make chrome-stage    Prints the staged extension version and SHA-256 identity.'
 
 test:
 	node --test tests/*.test.cjs
@@ -23,6 +25,7 @@ check: test
 	node --check scripts/sync-amo-listing-assets.mjs
 	node --check scripts/prepare-browser-package.mjs
 	node --check scripts/publish-chrome-store.mjs
+	node --check scripts/package-identity.mjs
 	node --check scripts/stage-package.mjs
 	node -e "JSON.parse(require('node:fs').readFileSync('manifest.json')); JSON.parse(require('node:fs').readFileSync('rules.json'));"
 
@@ -30,11 +33,13 @@ stage:
 	SOURCE_DATE_EPOCH="$(PACKAGE_EPOCH)" node scripts/stage-package.mjs dist/package $(PACKAGE_FILES)
 
 chrome-stage: stage
-	SOURCE_DATE_EPOCH="$(PACKAGE_EPOCH)" node scripts/prepare-browser-package.mjs chrome dist/package dist/chrome-package
+	BUILD_LABEL="$(BUILD_LABEL)" SOURCE_DATE_EPOCH="$(PACKAGE_EPOCH)" node scripts/prepare-browser-package.mjs chrome dist/package dist/chrome-package
+	node scripts/package-identity.mjs dist/chrome-package
 
 firefox-stage: stage
 	SOURCE_DATE_EPOCH="$(PACKAGE_EPOCH)" node scripts/prepare-browser-package.mjs firefox dist/package dist/firefox-package
 
+package: BUILD_LABEL =
 package: check chrome-stage
 	rm -f dist/gimme-sum-headers-chrome.zip
 	cd dist/chrome-package && TZ=UTC zip -X -q ../gimme-sum-headers-chrome.zip $(PACKAGE_FILES)

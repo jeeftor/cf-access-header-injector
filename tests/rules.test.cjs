@@ -74,6 +74,13 @@ test("unsafe, duplicate, and folded custom headers are rejected", () => {
   assert.throws(() => normalizeHeaders([{ name: "X-Test", value: "one\ntwo" }]));
 });
 
+test("a header set must have a user-provided name", () => {
+  assert.throws(() => normalizeConfiguration({
+    headerSets: [customSet("unnamed", "   ", [{ name: "X-Test", value: "value" }])],
+    siteAssignments: [],
+  }), /Every header set needs a name/);
+});
+
 test("an exact site excludes its wildcard default instead of merging headers", () => {
   const configuration = normalizeConfiguration({
     headerSets: [

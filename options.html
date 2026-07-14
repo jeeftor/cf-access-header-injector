@@ -7,11 +7,11 @@
     <link rel="stylesheet" href="options.css" />
   </head>
   <body>
-    <main>
+    <main class="app-shell">
       <header class="page-header">
-        <p class="eyebrow">HTTPS request headers</p>
-        <h1>Gimme Sum Headers!</h1>
-        <p class="intro">Create a reusable header set, then choose exactly where the browser should send it.</p>
+        <p class="eyebrow">Gimme Sum Headers</p>
+        <h1>Request headers, under control.</h1>
+        <p class="intro">Create a reusable header set, assign it to the HTTPS sites that need it, then save.</p>
         <div class="page-links">
           <a href="https://github.com/jeeftor/gimme-sum-headers" target="_blank" rel="noreferrer">View on GitHub</a>
           <button id="check-update" type="button" class="secondary">Check for update</button>
@@ -21,45 +21,41 @@
       </header>
 
       <form id="configuration-form">
-        <section class="header-set-workspace" aria-labelledby="header-sets-title">
-          <aside class="header-set-sidebar">
+        <div class="configuration-workspace" aria-label="Header configuration workflow">
+          <section class="header-set-sidebar" aria-labelledby="header-sets-title">
             <div class="section-heading sidebar-heading">
               <div>
-                <p class="eyebrow">Library</p>
-                <h2 id="header-sets-title">1. Header sets</h2>
-                <p>Create credentials once, then reuse them safely.</p>
+                <p class="eyebrow">01 · Header sets</p>
+                <h2 id="header-sets-title">Create reusable credentials</h2>
+                <p>Keep each credential set in one place, then reuse it wherever it belongs.</p>
               </div>
-              <button id="add-header-set" type="button" class="secondary">Add header set</button>
+              <button id="add-header-set" type="button">Create header set</button>
             </div>
             <div id="header-set-list" class="header-set-list"></div>
-          </aside>
-
-          <section class="header-set-editor-panel" aria-labelledby="selected-header-set-title">
-            <div class="editor-heading">
-              <p class="eyebrow">Step 1: selected set</p>
-              <h2 id="selected-header-set-title">Header set</h2>
-              <p id="selected-header-set-description"></p>
-            </div>
-            <div id="header-set-editor"></div>
+            <p id="header-set-empty" class="empty-state" hidden>No header sets yet. Create one to begin assigning headers to sites.</p>
           </section>
-        </section>
 
-        <section class="site-assignments-panel" aria-labelledby="site-assignments-title">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Mappings</p>
-              <h2 id="site-assignments-title">2. Site mappings</h2>
-              <p>Choose where a set applies. Exact hostnames override wildcard defaults.</p>
+          <section class="site-assignments-panel" aria-labelledby="site-assignments-title">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">02 · Sites</p>
+                <h2 id="site-assignments-title">Apply them to sites</h2>
+                <p>Use exact hosts whenever possible. Wildcards are defaults for matching subdomains.</p>
+              </div>
+              <div class="section-actions">
+                <button id="add-assignment" type="button" class="secondary">Add site</button>
+                <button id="add-test-site" type="button" class="secondary">Try safe test site</button>
+              </div>
             </div>
-            <button id="add-assignment" type="button" class="secondary">Add site assignment</button>
-          </div>
-          <div id="site-assignment-list" class="assignment-list"></div>
-        </section>
+            <div id="site-assignment-list" class="assignment-list"></div>
+            <p id="site-empty" class="empty-state" hidden>Create a header set, then add the first site that should receive it. The safe test site never uses real credentials.</p>
+          </section>
+        </div>
 
         <div class="save-bar">
           <div>
-            <strong>3. Save and apply</strong>
-            <p>Only the enabled HTTPS hostnames above receive these headers.</p>
+            <strong id="save-title">Changes applied</strong>
+            <p id="save-description">Only enabled HTTPS hostnames receive these headers.</p>
           </div>
           <div class="save-actions">
             <p id="status" role="status" aria-live="polite"></p>
@@ -68,14 +64,26 @@
         </div>
 
         <details class="danger-zone">
-          <summary>Danger zone</summary>
+          <summary>Reset this configuration</summary>
           <p>Remove every saved header value, site mapping, installed rule, and granted host permission from this browser.</p>
           <button id="forget" type="button" class="destructive">Forget all configuration</button>
         </details>
       </form>
 
+      <dialog id="header-set-dialog" aria-labelledby="selected-header-set-title">
+        <div class="dialog-heading">
+          <div>
+            <p class="eyebrow">Header set</p>
+            <h2 id="selected-header-set-title">Header set</h2>
+            <p id="selected-header-set-description"></p>
+          </div>
+          <button id="close-header-set-dialog" type="button" class="secondary">Done</button>
+        </div>
+        <div id="header-set-editor"></div>
+      </dialog>
+
       <aside class="security-note">
-        <h2>Security warning</h2>
+        <h2>Keep credentials scoped</h2>
         <p>
           Header values and their local request rules stay in this browser profile and are never synchronized. This is
           not a password manager or hardware-backed secret vault. They are sent only to HTTPS sites you explicitly map.
@@ -89,10 +97,13 @@
     </main>
 
     <template id="header-set-list-item-template">
-      <button class="header-set-list-item" type="button">
-        <span class="header-set-list-item-name"></span>
-        <span class="header-set-list-item-meta"></span>
-      </button>
+      <div class="header-set-list-item">
+        <button class="header-set-list-select" type="button">
+          <span class="header-set-list-item-name"></span>
+          <span class="header-set-list-item-meta"></span>
+        </button>
+        <button class="header-set-list-delete" type="button" aria-label="Delete header set" title="Delete header set">×</button>
+      </div>
     </template>
 
     <template id="header-set-editor-template">
@@ -100,7 +111,7 @@
         <legend>Set details</legend>
         <label>
           <span>Name</span>
-          <input class="header-set-name" type="text" autocomplete="off" placeholder="Cloudflare Access" />
+          <input class="header-set-name" type="text" autocomplete="off" placeholder="e.g. Home Assistant" required />
         </label>
         <label>
           <span>Preset</span>
@@ -113,7 +124,6 @@
         <div class="preset-fields"></div>
         <div class="editor-footer">
           <p class="header-set-usage"></p>
-          <button class="remove-header-set destructive" type="button">Remove header set</button>
         </div>
       </fieldset>
     </template>
@@ -135,7 +145,8 @@
             <input class="assignment-enabled" type="checkbox" checked />
             <span>Enabled</span>
           </label>
-          <button class="remove-assignment secondary" type="button">Remove</button>
+          <button class="remove-assignment secondary" type="button">Remove site</button>
+          <button class="test-headers secondary" type="button" hidden>Test headers</button>
         </div>
       </fieldset>
     </template>

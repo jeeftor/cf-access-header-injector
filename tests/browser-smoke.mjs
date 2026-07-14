@@ -9,6 +9,7 @@ const { createHeaderRule } = createRequire(import.meta.url)("../rules.js");
 
 const extensionPath = resolve(process.env.EXTENSION_PATH ?? "dist/chrome-package");
 const echoUrl = process.env.HEADER_ECHO_URL ?? "https://httpbingo.org/headers";
+const browserExecutablePath = process.env.BROWSER_EXECUTABLE_PATH;
 const echoHost = new URL(echoUrl).hostname;
 const testHeaderName = "X-Gimme-Sum-Headers-Test";
 const testHeaderValue = "gimme-sum-headers-browser-smoke";
@@ -25,7 +26,7 @@ await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
 try {
   const context = await chromium.launchPersistentContext(userDataDir, {
-    channel: "chromium",
+    ...(browserExecutablePath ? { executablePath: browserExecutablePath } : { channel: "chromium" }),
     headless: true,
     args: [
       `--disable-extensions-except=${extensionPath}`,
@@ -52,6 +53,31 @@ try {
 
     assert.deepEqual(response.headers[testHeaderName], [testHeaderValue]);
     console.log(`Verified ${testHeaderName} through extension ${extensionId}.`);
+
+    const optionsPage = await context.newPage();
+    await optionsPage.goto(`chrome-extension://${extensionId}/options.html`, { waitUntil: "domcontentloaded" });
+    await optionsPage.getByRole("button", { name: "Add test site" }).click();
+    await assert.doesNotReject(() => optionsPage.locator(".save-bar[data-unsaved='true']").waitFor());
+    await optionsPage.getByRole("button", { name: "Save & test headers" }).click();
+    await assert.doesNotReject(() => optionsPage.getByText("Saved. Choose Test headers to open the header echo.").waitFor());
+
+    const testPagePromise = context.waitForEvent("page");
+    await optionsPage.getByRole("button", { name: "Test headers" }).click();
+    const testPage = await testPagePromise;
+    await testPage.waitForURL(echoUrl);
+    const testResponse = JSON.parse(await testPage.locator("body").innerText());
+    assert.deepEqual(testResponse.headers[testHeaderName], [testHeaderValue]);
+
+    await optionsPage.getByRole("button", { name: "Header check" }).click();
+    await optionsPage.getByRole("button", { name: "Remove site" }).click();
+    await optionsPage.getByRole("button", { name: "Done" }).click();
+    const deleteHeaderSet = optionsPage.locator(".header-set-list-delete");
+    await assert.doesNotReject(() => deleteHeaderSet.waitFor());
+    optionsPage.once("dialog", (dialog) => dialog.accept());
+    await deleteHeaderSet.click();
+    assert.equal(await optionsPage.locator("#header-set-dialog").evaluate((dialog) => dialog.open), false);
+    await assert.doesNotReject(() => optionsPage.getByText("No header sets yet. Create one, then select it for a site.").waitFor());
+    console.log("Verified the options page shows unsaved state and handles removal clearly.");
   } finally {
     await context.close();
   }

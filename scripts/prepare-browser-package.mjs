@@ -10,6 +10,7 @@ if (!supportedBrowsers.has(browser) || !sourceDirectory || !destinationDirectory
 }
 
 const sourceDateEpoch = Number.parseInt(process.env.SOURCE_DATE_EPOCH ?? "", 10);
+const buildLabel = process.env.BUILD_LABEL;
 
 if (!Number.isInteger(sourceDateEpoch) || sourceDateEpoch < minimumZipTimestamp) {
   throw new Error("SOURCE_DATE_EPOCH must be an integer Unix timestamp on or after 1980-01-01.");
@@ -24,8 +25,12 @@ const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 
 if (browser === "chrome") {
   delete manifest.background.scripts;
+  if (buildLabel) {
+    manifest.version_name = buildLabel;
+  }
 } else {
   delete manifest.background.service_worker;
+  delete manifest.version_name;
 }
 
 await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
