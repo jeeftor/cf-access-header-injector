@@ -6,7 +6,7 @@
   "homepage_url": "https://github.com/jeeftor/gimme-sum-headers",
   "permissions": [
     "activeTab",
-    "declarativeNetRequest",
+    "declarativeNetRequestWithHostAccess",
     "storage"
   ],
   "optional_host_permissions": [
