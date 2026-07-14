@@ -45,7 +45,7 @@ try {
 
     const optionsPage = await context.newPage();
     await optionsPage.goto(`chrome-extension://${extensionId}/options.html`, { waitUntil: "domcontentloaded" });
-    await optionsPage.getByRole("button", { name: "Add test site" }).click();
+    await optionsPage.getByRole("button", { name: "Try safe test site" }).click();
     await assert.doesNotReject(() => optionsPage.locator(".save-bar[data-unsaved='true']").waitFor());
     await optionsPage.getByRole("button", { name: "Save & test headers" }).click();
     await assert.doesNotReject(() => optionsPage.getByText("Saved. Choose Test headers to open the header echo.").waitFor());
