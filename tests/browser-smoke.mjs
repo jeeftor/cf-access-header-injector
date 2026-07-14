@@ -24,6 +24,17 @@ const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
 manifest.host_permissions = [...new Set([...(manifest.host_permissions ?? []), `https://${echoHost}/*`])];
 await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
 
+/**
+ * Verifies the final request headers Chromium sends after declarative rules run.
+ *
+ * @param {import("playwright").Request} request A request made by the test page.
+ * @returns {Promise<void>} A promise that resolves when the injected header is verified.
+ */
+async function assertInjectedHeader(request) {
+  const headers = await request.allHeaders();
+  assert.equal(headers[testHeaderName.toLowerCase()], testHeaderValue);
+}
+
 try {
   const context = await chromium.launchPersistentContext(userDataDir, {
     ...(browserExecutablePath ? { executablePath: browserExecutablePath } : { channel: "chromium" }),
@@ -48,10 +59,9 @@ try {
     assert.equal(ruleCount, 1);
 
     const page = await context.newPage();
+    const initialRequest = page.waitForRequest((request) => request.url() === echoUrl);
     await page.goto(echoUrl, { waitUntil: "domcontentloaded" });
-    const response = JSON.parse(await page.locator("body").innerText());
-
-    assert.deepEqual(response.headers[testHeaderName], [testHeaderValue]);
+    await assertInjectedHeader(await initialRequest);
     console.log(`Verified ${testHeaderName} through extension ${extensionId}.`);
 
     const optionsPage = await context.newPage();
@@ -62,11 +72,11 @@ try {
     await assert.doesNotReject(() => optionsPage.getByText("Saved. Choose Test headers to open the header echo.").waitFor());
 
     const testPagePromise = context.waitForEvent("page");
+    const testRequestPromise = context.waitForEvent("request", (request) => request.url() === echoUrl);
     await optionsPage.getByRole("button", { name: "Test headers" }).click();
-    const testPage = await testPagePromise;
+    const [testPage, testRequest] = await Promise.all([testPagePromise, testRequestPromise]);
     await testPage.waitForURL(echoUrl);
-    const testResponse = JSON.parse(await testPage.locator("body").innerText());
-    assert.deepEqual(testResponse.headers[testHeaderName], [testHeaderValue]);
+    await assertInjectedHeader(testRequest);
 
     await optionsPage.getByRole("button", { name: "Header check" }).click();
     await optionsPage.getByRole("button", { name: "Remove site" }).click();
