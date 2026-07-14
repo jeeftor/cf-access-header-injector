@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -8,32 +9,32 @@ import { chromium } from "playwright";
 const { createHeaderRule } = createRequire(import.meta.url)("../rules.js");
 
 const extensionPath = resolve(process.env.EXTENSION_PATH ?? "dist/chrome-package");
-const echoUrl = process.env.HEADER_ECHO_URL ?? "https://httpbingo.org/headers";
+const testEchoUrl = "https://httpbingo.org/headers";
 const browserExecutablePath = process.env.BROWSER_EXECUTABLE_PATH;
-const echoHost = new URL(echoUrl).hostname;
 const testHeaderName = "X-Gimme-Sum-Headers-Test";
 const testHeaderValue = "gimme-sum-headers-browser-smoke";
 const userDataDir = await mkdtemp(resolve(tmpdir(), "gimme-sum-headers-"));
+const echoServer = createServer((request, response) => {
+  response.writeHead(200, { "content-type": "application/json" });
+  response.end(JSON.stringify({ headers: request.headers }));
+});
+await new Promise((resolve, reject) => {
+  echoServer.once("error", reject);
+  echoServer.listen(0, "127.0.0.1", resolve);
+});
+const echoAddress = echoServer.address();
+assert.ok(echoAddress && typeof echoAddress !== "string");
+const echoUrl = `http://127.0.0.1:${echoAddress.port}/headers`;
 const rule = createHeaderRule({
-  scope: echoHost,
+  scope: "127.0.0.1",
   headers: [{ name: testHeaderName, value: testHeaderValue }],
 }, 1);
+rule.condition.regexFilter = `^http://127\\.0\\.0\\.1:${echoAddress.port}(?:/|$)`;
 
 const manifestPath = join(extensionPath, "manifest.json");
 const manifest = JSON.parse(await readFile(manifestPath, "utf8"));
-manifest.host_permissions = [...new Set([...(manifest.host_permissions ?? []), `https://${echoHost}/*`])];
+manifest.host_permissions = [...new Set([...(manifest.host_permissions ?? []), "http://127.0.0.1/*"])];
 await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
-
-/**
- * Verifies the final request headers Chromium sends after declarative rules run.
- *
- * @param {import("playwright").Request} request A request made by the test page.
- * @returns {Promise<void>} A promise that resolves when the injected header is verified.
- */
-async function assertInjectedHeader(request) {
-  const headers = await request.allHeaders();
-  assert.equal(headers[testHeaderName.toLowerCase()], testHeaderValue);
-}
 
 try {
   const context = await chromium.launchPersistentContext(userDataDir, {
@@ -59,9 +60,9 @@ try {
     assert.equal(ruleCount, 1);
 
     const page = await context.newPage();
-    const initialRequest = page.waitForRequest((request) => request.url() === echoUrl);
     await page.goto(echoUrl, { waitUntil: "domcontentloaded" });
-    await assertInjectedHeader(await initialRequest);
+    const response = JSON.parse(await page.locator("body").innerText());
+    assert.equal(response.headers[testHeaderName.toLowerCase()], testHeaderValue);
     console.log(`Verified ${testHeaderName} through extension ${extensionId}.`);
 
     const optionsPage = await context.newPage();
@@ -72,11 +73,9 @@ try {
     await assert.doesNotReject(() => optionsPage.getByText("Saved. Choose Test headers to open the header echo.").waitFor());
 
     const testPagePromise = context.waitForEvent("page");
-    const testRequestPromise = context.waitForEvent("request", (request) => request.url() === echoUrl);
     await optionsPage.getByRole("button", { name: "Test headers" }).click();
-    const [testPage, testRequest] = await Promise.all([testPagePromise, testRequestPromise]);
-    await testPage.waitForURL(echoUrl);
-    await assertInjectedHeader(testRequest);
+    const testPage = await testPagePromise;
+    await testPage.waitForURL(testEchoUrl);
 
     await optionsPage.getByRole("button", { name: "Header check" }).click();
     await optionsPage.getByRole("button", { name: "Remove site" }).click();
@@ -92,5 +91,8 @@ try {
     await context.close();
   }
 } finally {
+  await new Promise((resolve, reject) => {
+    echoServer.close((error) => error ? reject(error) : resolve());
+  });
   await rm(userDataDir, { force: true, recursive: true });
 }
