@@ -48,8 +48,8 @@ try {
     await assert.doesNotReject(() => optionsPage.locator(".save-bar[data-unsaved='true']").waitFor());
 
     await optionsPage.getByRole("button", { name: "Header check" }).click();
-    await optionsPage.getByRole("button", { name: "Remove site" }).click();
     await optionsPage.getByRole("button", { name: "Done" }).click();
+    await optionsPage.getByRole("button", { name: "Remove site" }).click();
     const deleteHeaderSet = optionsPage.locator(".header-set-list-delete");
     await assert.doesNotReject(() => deleteHeaderSet.waitFor());
     optionsPage.once("dialog", (dialog) => dialog.accept());
