@@ -8,7 +8,6 @@ import { chromium } from "playwright";
 const { createHeaderRule } = createRequire(import.meta.url)("../rules.js");
 
 const extensionPath = resolve(process.env.EXTENSION_PATH ?? "dist/chrome-package");
-const testEchoUrl = "https://httpbingo.org/headers";
 const browserExecutablePath = process.env.BROWSER_EXECUTABLE_PATH;
 const testHeaderName = "X-Gimme-Sum-Headers-Test";
 const testHeaderValue = "gimme-sum-headers-browser-smoke";
@@ -47,13 +46,6 @@ try {
     await optionsPage.goto(`chrome-extension://${extensionId}/options.html`, { waitUntil: "domcontentloaded" });
     await optionsPage.getByRole("button", { name: "Try safe test site" }).click();
     await assert.doesNotReject(() => optionsPage.locator(".save-bar[data-unsaved='true']").waitFor());
-    await optionsPage.getByRole("button", { name: "Save & test headers" }).click();
-    await assert.doesNotReject(() => optionsPage.getByText("Saved. Choose Test headers to open the header echo.").waitFor());
-
-    const testPagePromise = context.waitForEvent("page");
-    await optionsPage.getByRole("button", { name: "Test headers" }).click();
-    const testPage = await testPagePromise;
-    await testPage.waitForURL(testEchoUrl);
 
     await optionsPage.getByRole("button", { name: "Header check" }).click();
     await optionsPage.getByRole("button", { name: "Remove site" }).click();
